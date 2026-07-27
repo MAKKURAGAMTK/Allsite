@@ -27,6 +27,7 @@
     --sakit:#8a5fc9;
     --cuti:#3d94c9;
     --alfa:#c9403a;
+    --off:#6b7280;
   }
   *{box-sizing:border-box;}
   body{
@@ -80,6 +81,7 @@
   .status-btn[data-status="SAKIT"].active{background:var(--sakit);color:#fff;border-color:var(--sakit);}
   .status-btn[data-status="CUTI"].active{background:var(--cuti);color:#fff;border-color:var(--cuti);}
   .status-btn[data-status="ALFA"].active{background:var(--alfa);color:#fff;border-color:var(--alfa);}
+  .status-btn[data-status="OFF"].active{background:var(--off);color:#fff;border-color:var(--off);}
 
   .note-toggle{width:26px;height:26px;flex-shrink:0;border:1px solid var(--border);background:#fff;border-radius:7px;color:var(--text-mute);font-size:13px;display:flex;align-items:center;justify-content:center;}
   .note-toggle.has-note{border-color:var(--orange);color:var(--orange);}
@@ -153,6 +155,7 @@
   .history-badge.SAKIT{background:var(--sakit);}
   .history-badge.CUTI{background:var(--cuti);}
   .history-badge.ALFA{background:var(--alfa);}
+  .history-badge.OFF{background:var(--off);}
 
   .history-bottom{display:flex;align-items:center;gap:10px;margin-top:6px;}
   .history-edit-btn{font-size:11px;padding:4px 10px;}
@@ -286,6 +289,11 @@ let participants = []; // {nama, jabatan, status, catatan}
 let currentGroup = null;
 let skippedTodayCount = 0; // jumlah peserta yang disembunyikan karena sudah absen hari ini
 const STATUSES = ["HADIR","IZIN","SAKIT","CUTI","ALFA"];
+const OFF_GROUPS = ["mekanik dt, tireman, logistik laroenai", "mekanik dt,tireman,logistik laroenai"];
+function statusesFor(){
+  const g = (currentGroup || '').trim().toLowerCase();
+  return OFF_GROUPS.includes(g) ? [...STATUSES, "OFF"] : STATUSES;
+}
 const openNotes = new Set(); // idx peserta yang note-box-nya sedang terbuka, agar tidak ketutup saat re-render
 
 function normalizeName_(s){
@@ -473,7 +481,7 @@ function renderList(){
       <div class="name"><span class="name-text">${escapeHtml(p.nama)}</span>${p.jabatan ? `<div class="jabatan">${escapeHtml(p.jabatan)}</div>` : ''}</div>
       <button class="note-toggle ${p.catatan ? 'has-note' : ''}" data-idx="${i}" title="Catatan">✎</button>
       <div class="status-group">
-        ${STATUSES.map(s => `<button class="status-btn ${p.status===s?'active':''}" data-idx="${i}" data-status="${s}">${s}</button>`).join('')}
+        ${statusesFor().map(s => `<button class="status-btn ${p.status===s?'active':''}" data-idx="${i}" data-status="${s}">${s}</button>`).join('')}
       </div>
     </div>
     <div class="note-input${openNotes.has(i) ? ' open' : ''}" data-note-idx="${i}">
@@ -560,7 +568,11 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
     }else{
       showToast(`Berhasil menyimpan ${data.saved} absensi ke "${currentGroup}"`, 'ok');
     }
-    await loadParticipants();
+    // Update tampilan langsung tanpa reload dari server (hindari 2x fetch tambahan)
+    const savedSet = new Set(toSave.map(p => p.nama));
+    participants = participants.filter(p => !savedSet.has(p.nama));
+    skippedTodayCount += toSave.length;
+    renderList();
   }catch(err){
     showToast('Gagal menyimpan: ' + err.message, 'error');
   }finally{
@@ -628,7 +640,7 @@ async function loadHistory(){
         ${r.catatan ? `<div class="history-meta">Catatan: ${escapeHtml(r.catatan)}</div>` : ''}
         <div class="history-edit-box" data-hist-edit="${i}">
           <div class="status-group">
-            ${STATUSES.map(s => `<button class="status-btn hist-status-btn ${r.keterangan===s?'active':''}" data-hist-idx="${i}" data-status="${s}">${s}</button>`).join('')}
+            ${statusesFor().map(s => `<button class="status-btn hist-status-btn ${r.keterangan===s?'active':''}" data-hist-idx="${i}" data-status="${s}">${s}</button>`).join('')}
           </div>
           <input type="text" class="hist-note-input" placeholder="Catatan (opsional)" value="${escapeHtml(r.catatan)}" data-hist-note="${i}">
           <div class="hist-edit-actions">
@@ -697,7 +709,29 @@ async function loadHistory(){
           const data2 = await res2.json();
           if(!data2.ok) throw new Error(data2.error || 'Gagal menyimpan perubahan');
           showToast('Absensi berhasil diubah', 'ok');
-          loadHistory();
+          // Update tampilan langsung tanpa fetch ulang seluruh riwayat
+          row.keterangan = edit.status;
+          row.catatan = edit.catatan;
+          const item = btn.closest('.history-item');
+          const badge = item.querySelector('.history-badge');
+          badge.className = `history-badge ${escapeHtml(edit.status)}`;
+          badge.textContent = edit.status;
+          const existingCatatan = item.querySelectorAll('.history-meta');
+          const catatanNode = [...existingCatatan].find(el => el.textContent.startsWith('Catatan:'));
+          if(edit.catatan){
+            if(catatanNode){ catatanNode.textContent = `Catatan: ${edit.catatan}`; }
+            else{
+              const div = document.createElement('div');
+              div.className = 'history-meta';
+              div.textContent = `Catatan: ${edit.catatan}`;
+              item.querySelector('.history-bottom').insertAdjacentElement('afterend', div);
+            }
+          }else if(catatanNode){
+            catatanNode.remove();
+          }
+          item.querySelector('.history-edit-box').classList.remove('open');
+          btn.disabled = false;
+          btn.textContent = 'Simpan Perubahan';
         }catch(err){
           showToast('Gagal mengubah: ' + err.message, 'error');
           btn.disabled = false;
