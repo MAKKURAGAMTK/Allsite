@@ -288,11 +288,9 @@ const STORAGE_KEY = 'p5m_selected_group';
 let participants = []; // {nama, jabatan, status, catatan}
 let currentGroup = null;
 let skippedTodayCount = 0; // jumlah peserta yang disembunyikan karena sudah absen hari ini
-const STATUSES = ["HADIR","IZIN","SAKIT","CUTI","ALFA"];
-const OFF_GROUPS = ["mekanik dt, tireman, logistik laroenai", "mekanik dt,tireman,logistik laroenai"];
+const STATUSES = ["HADIR","IZIN","SAKIT","CUTI","ALFA","OFF"];
 function statusesFor(){
-  const g = (currentGroup || '').trim().toLowerCase();
-  return OFF_GROUPS.includes(g) ? [...STATUSES, "OFF"] : STATUSES;
+  return STATUSES;
 }
 const openNotes = new Set(); // idx peserta yang note-box-nya sedang terbuka, agar tidak ketutup saat re-render
 

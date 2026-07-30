@@ -1,4 +1,4 @@
-const CACHE_NAME = 'p5m-mkg-v3';
+const CACHE_NAME = 'p5m-mkg-v4';
 const APP_SHELL = [
   './',
   './index.html',
